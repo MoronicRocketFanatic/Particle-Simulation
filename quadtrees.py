@@ -2,14 +2,9 @@ import pygame # My favorite rendering library...
 from pygame import Vector2, gfxdraw # ... outshined only by gfxdraw
 from copy import deepcopy
 
-global position_checks # These are just here for the time being as I debug this code, perhaps I should just switch to keeping track of it in the root cell of the tree. TODO
-position_checks = 0
-global furthest_depth
-furthest_depth = 1
-
 class Quadtree():
     
-    def __init__(self, position:Vector2, width:int, expansion_threshold:int, ancestor:"Quadtree" = False, depth:int = 1) -> None:
+    def __init__(self, position:Vector2, width:int, expansion_threshold:int, ancestor:"Quadtree" = False, parent: "Quadtree" = False, index: list[int, int] = False,  depth:int = 1) -> None:
         """Initialize a Quadtree cell with the given information.
 
         Args:
@@ -19,19 +14,27 @@ class Quadtree():
             ancestor (Quadtree, optional): _The root/ancestor cell of the Quadtree._. Defaults to self (this works for root cells).
             depth (int, optional): _Recursive depth of the cell, purely for debugging and completely optional._. Defaults to 1.
         """        
-        self.position = position
-        self.width = width
-        self.expansion_threshold = expansion_threshold
+        self.position: Vector2 = position
+        self.width: int = width
+        self.expansion_threshold: int = expansion_threshold
         if not ancestor:
-            self.ancestor = self
+            self.ancestor: Quadtree = self
         else:
             self.ancestor: Quadtree = ancestor
+        
+        self.depth: int = depth
+        self.parent: Quadtree = parent
+        self.index: list[int, int] = index
+        
         
         self.contents = []
         self.is_divided: bool = False
         self.cells: list[list[Quadtree]] = [[],[]]
-        self.depth = depth
         
+        # These are only used by the ancestor for debug
+        self.positional_checks: int = 0
+        self.furthest_depth: int = 1
+                
         self.monopole = 0
         self.dipole = Vector2()
         
@@ -64,7 +67,6 @@ class Quadtree():
         Returns:
             Quadtree: _Found cell._
         """        
-        global position_checks
         position = deepcopy(position) # We operate on the position so we need to make a copy
         position += Vector2(quadtree.width//2, quadtree.width//2) # adjust for slight offset
         while quadtree.is_divided:
@@ -81,9 +83,19 @@ class Quadtree():
                 
             
             quadtree = quadtree.cells[x][y]
-            position_checks += 1 # Keep track for debugging
+            quadtree.ancestor.positional_checks += 1 # Keep track for debugging
         return quadtree
             
+            
+    def find_adjacent(self) -> list["Quadtree"]:
+        top = []
+        right = []
+        bottom = []
+        left = []
+        
+
+        
+    
             
     def calculate_poles(self, surface:pygame.Surface, color:tuple[int, int, int] = (255, 0, 0), scale:float = 1, offset: Vector2 = Vector2(0, 0)) -> None:  
         """Calculate and render the monopole and dipole of this Quadtree cell.
@@ -121,31 +133,22 @@ class Quadtree():
         except OverflowError:
             print(f"X: {int(self.dipole.x)}, Y: {int(self.dipole.y)}, R: {int(self.monopole**0.5)}")
         
-        
-    @staticmethod
-    def reset_checks() -> None:
-        """Reset the debugging global values.
-        """        
-        global position_checks, furthest_depth
-        position_checks = 0
-        furthest_depth = 1
     
         
     def subdivide(self) -> None:
         """Subdivide this Quadtree cell into four other cells.
         """        
-        global furthest_depth
         subdivided_size = self.width/2  # Do these operations here to avoid doing them a load of times
         half_sub_size = subdivided_size/2
         #       Coordinate          |                              Center Position                        | Set New width  | Set Expansion Threshold | Mark Ancestor
-        self.cells[0].append(Quadtree(Vector2(self.position.x-half_sub_size, self.position.y-half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self.depth+1)) # DATA STRUCTURE:               (EACH QUADRANT WITH IT'S OWN FOUR QUADRANTS)
-        self.cells[0].append(Quadtree(Vector2(self.position.x-half_sub_size, self.position.y+half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self.depth+1)) # [  0 [Q1, Q2]
-        self.cells[1].append(Quadtree(Vector2(self.position.x+half_sub_size, self.position.y-half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self.depth+1)) #    1 [Q3, Q4]  ] 
-        self.cells[1].append(Quadtree(Vector2(self.position.x+half_sub_size, self.position.y+half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self.depth+1)) #       0    1
+        self.cells[0].append(Quadtree(Vector2(self.position.x-half_sub_size, self.position.y-half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self, self.depth+1)) # DATA STRUCTURE:               (EACH QUADRANT WITH IT'S OWN FOUR QUADRANTS)
+        self.cells[0].append(Quadtree(Vector2(self.position.x-half_sub_size, self.position.y+half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self, self.depth+1)) # [  0 [Q1, Q2]
+        self.cells[1].append(Quadtree(Vector2(self.position.x+half_sub_size, self.position.y-half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self, self.depth+1)) #    1 [Q3, Q4]  ] 
+        self.cells[1].append(Quadtree(Vector2(self.position.x+half_sub_size, self.position.y+half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self, self.depth+1)) #       0    1
         self.is_divided = True
         
-        if self.depth + 1 > furthest_depth: # This is for debugging
-            furthest_depth = self.depth + 1
+        if self.depth + 1 > self.ancestor.furthest_depth: # This is for debugging
+            self.ancestor.furthest_depth = self.depth + 1
         
     
     def draw_quad(self, surface: pygame.Surface, color: tuple[int, int, int] = (200, 200, 200), scale: float = 1, offset: Vector2 = Vector2(0, 0)) -> None:

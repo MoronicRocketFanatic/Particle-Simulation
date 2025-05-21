@@ -1,7 +1,6 @@
 import pygame
 from pygame import gfxdraw, Vector2
 from quadtrees import Quadtree
-import quadtrees
 
 
 class Celestial_Body():
@@ -65,8 +64,6 @@ class Celestial_Body():
 
 
 
-global collision_checks # Debug variable, I should probably just store it as a field for the Solver. TODO
-collision_checks = 0
 
 
 class Solver():
@@ -86,6 +83,8 @@ class Solver():
         self.constraint_position = False
         self.constraint_radius = False
         self.constraint_color = (65, 65, 65)
+        
+        self.collision_checks = 0
         
     
     def create_constraint(self, radius:int, position:Vector2 = Vector2(0,0), color:tuple[int,int,int] = (165, 165, 165)) -> None:
@@ -145,35 +144,30 @@ class Solver():
     def solve_collisions(self) -> None:
         """Solve collisions for all Celestial Bodies, currently runs in O(n^2) time complexity (each particle compares with every other one), upcoming Quadtree implementation will speed this up substantially.
         """        
-        global collision_checks
         self.quadtree = Quadtree(self.quadtree.position, self.quadtree.width, self.quadtree.expansion_threshold)
         
-        Quadtree.reset_checks()
         for body in self.objects:
             self.quadtree.find_position(self.quadtree, body.position).insert(body)
         
-        collision_checks = 0
-        Solver.quadtree_collision_check(self.quadtree)
+        self.collision_checks = 0
+        self.quadtree_collision_check(self.quadtree)
     
-    
-    
-    @staticmethod
-    def quadtree_collision_check(quadtree:Quadtree) -> None:
+
+    def quadtree_collision_check(self, quadtree:Quadtree) -> None:
         """Check for collisions between all Quadtree contents.
 
         Args:
             quadtree (Quadtree): _Quadtree full of objects._
         """        
-        global collision_checks
         if quadtree.is_divided: # We need to do this recursively
             for cell_row in quadtree.cells:
                 for cell in cell_row:
-                    Solver.quadtree_collision_check(cell)
+                    self.quadtree_collision_check(cell)
                     
         else: # Does not yet compare to adjacent Quadtree cells... TODO
             for body_1 in quadtree.contents:
                 for body_2 in quadtree.contents:
-                    collision_checks+=1 # Increment debug variable
+                    self.collision_checks+=1 # Increment debug variable
                     
                     if body_1 != body_2:
                         collision_axis = body_1.position - body_2.position # Axis of collision is also the midpoint
