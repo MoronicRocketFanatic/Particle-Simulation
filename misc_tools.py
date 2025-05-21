@@ -67,6 +67,8 @@ def color_temperature_rgb(temperature:int=1500) -> tuple[float, float, float]:
     return (red, green, blue)
 
 
+def test(i) -> int:
+    return i
 if __name__ == "__main__": # Simple test code
     for i in range(100):
         print(rainbow_cycle(i/10))
