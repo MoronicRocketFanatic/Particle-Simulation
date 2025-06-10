@@ -16,7 +16,11 @@ class Quadtree():
         self.position: Vector2 = position
         self.width: int = width
         self.expansion_threshold: int = expansion_threshold
+        self.position: Vector2 = position
+        self.width: int = width
+        self.expansion_threshold: int = expansion_threshold
         if not ancestor:
+            self.ancestor: Quadtree = self
             self.ancestor: Quadtree = self
         else:
             self.ancestor: Quadtree = ancestor
