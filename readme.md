@@ -1,11 +1,11 @@
 # Quadtree-Optimized Particle Simulation
-
+To run source, PyGame or PyGame-CE is required, `pip install pygame-ce`
 ## Brief Description
 A 2-Dimensional simple particle simulation made in python that utilizes PyGame for rendering.
 Quadtrees are used to optimize O(n^2) collision detection into something more managable, the tree is rebuilt each frame (or iteration).
 The Fast Multipole Method (FMM) will eventually be implemented in order to calculate n-body gravity.
 
-Updates are slow because this is a side-project of mine.
+Updates are slow because this is a side-project of mine, expect an eventual conversion to C++, which may be a re-factor, a seperate branch, or another repository altogether.
 
 ## Up Next:
 * Solve collisions for objects in adjacent cells

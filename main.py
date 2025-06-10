@@ -2,14 +2,11 @@ import pygame
 import sys
 from pygame import gfxdraw, Vector2
 from physics import Celestial_Body, Solver
-import physics
-import quadtrees
 from quadtrees import Quadtree
 from misc_tools import rainbow_cycle
+from random import randint
 
-# WINDOW_WIDTH, WINDOW_HEIGHT = int(sys.argv[1]), int(sys.argv[2])
 WINDOW_WIDTH, WINDOW_HEIGHT = 1200, 650
-# WINDOW_WIDTH, WINDOW_HEIGHT = 1920, 1080
 SCREEN_COLOR = (0,0,0)
 
 display = pygame.display.set_mode((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.RESIZABLE)
@@ -35,8 +32,11 @@ dragging = False
 mouse_position = pygame.mouse.get_pos()
 drag_start = [display_position, mouse_position]
 
+sys.setrecursionlimit(5000000) # Needed, stack overflow is not really gonna happen with how the recursion is built
 quadtree = Quadtree(Vector2(0, 0), 8000, 5)
 celestial_bodies = [Celestial_Body(Vector2(0, 0), 15, DEFAULT_MASS, (0, 50, 255)), Celestial_Body(Vector2(0 + 80, 0), 30, DEFAULT_MASS*2, (255, 165, 0))]
+# for body in range(5000): # Uncomment for spawning of 5000 random objects
+#     celestial_bodies.append(Celestial_Body(Vector2(randint(-3800, 3800), randint(-3800, 3800)), randint(15, 45), DEFAULT_MASS*randint(1, 5), rainbow_cycle(body/10)))
 
 solver = Solver(celestial_bodies, quadtree, subsets=8)
 solver.create_constraint(8000/2, Vector2(0, 0))
@@ -67,28 +67,16 @@ while running:
             
         elif event.type == pygame.MOUSEWHEEL: # Display Scaling
             if event.y > 0:
-                # display_scale += 0.01*display_scale
-                display_scale *= 1 + 0.01
+                display_scale *= 1.01
             
             elif event.y < 0:
-                # display_scale -= 0.01*display_scale
-                display_scale *= 1 - 0.01
+                display_scale *= 0.99
                 
         elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_p:
-                place_mode = not place_mode
-
-
-                
-        # elif event.type == pygame.MOUSEBUTTONDOWN: # Quadtree debug
-        #     if pygame.mouse.get_pressed()[2]:
-                
-        #         mouse_position = Vector2(pygame.mouse.get_pos())
-        #         converted_mouse_position = Vector2((mouse_position.x-display_position.x) / display_scale, 
-        #                                         (mouse_position.y-display_position.y) / display_scale)
-
-        #         quadtree.find_position(quadtree, deepcopy(converted_mouse_position)).subdivide()
-                
+            if event.key == pygame.K_DELETE: # Just a scene clear
+                solver.objects = []
+                celestial_bodies = solver.objects
+                      
                 
         elif event.type == pygame.VIDEORESIZE:
             WINDOW_WIDTH, WINDOW_HEIGHT = pygame.display.get_window_size()
@@ -107,16 +95,16 @@ while running:
                      10, # Radius
                      (255, 0, 0)) # Color
     
-    if mouse[0] and place_mode:
+    if mouse[0]:
         celestial_bodies.append(Celestial_Body(Vector2(converted_mouse_position), 30, DEFAULT_MASS, rainbow_cycle(total_time)))
 
     elif dragging:
-        if mouse[0]:
+        if mouse[2]:
             display_position = drag_start[0] + mouse_position - drag_start[1]
         else:
             dragging = False
             
-    elif mouse[0]:
+    elif mouse[2]:
         dragging = True
         drag_start = [display_position, mouse_position]
         
@@ -126,7 +114,7 @@ while running:
     # Keypress Handling
     keys = pygame.key.get_pressed()
     if keys[pygame.K_w]:
-        display_position += Vector2(0, 1)/display_scale 
+        display_position += Vector2(0, 1)/display_scale # this way allows the speed of the camera to be relative to the scale of the screen
     elif keys[pygame.K_s]:
         display_position += Vector2(0, -1)/display_scale
         
@@ -135,13 +123,9 @@ while running:
     elif keys[pygame.K_d]:
         display_position += Vector2(-1, 0)/display_scale
         
-    if keys[pygame.K_UP]:
-        # delta_time = 1/FPS
-        # color_temp += 10   
+    if keys[pygame.K_UP]:  
         display_scale *= 1.01
     elif keys[pygame.K_DOWN]:
-        # delta_time = -1/FPS
-        # color_temp -= 10
         display_scale *= 0.99
                     
     if keys[pygame.K_q] and keys[pygame.K_e]:
@@ -158,25 +142,33 @@ while running:
         object.draw(display, display_scale, display_position)
     
     solver.quadtree.draw_quad(display, (200, 200, 200), display_scale, display_position)
-    solver.quadtree.calculate_poles(display, (255, 0, 0), display_scale, display_position)
     gfxdraw.box(display, pygame.Rect(0, 0, 10, 10), rainbow_cycle(total_time))
     
-    if int(quadtrees.position_checks/quadtrees.furthest_depth) > len(celestial_bodies):
-        temp = f"{int(quadtrees.position_checks/quadtrees.furthest_depth)} > {len(celestial_bodies)}"
-    elif int(quadtrees.position_checks/quadtrees.furthest_depth) == len(celestial_bodies):
-        temp = f"{int(quadtrees.position_checks/quadtrees.furthest_depth)} == {len(celestial_bodies)}"
+
+    # ---------------DEBUG----------------- (can be commented out and functionality will not be hindered)
+    if int(solver.quadtree.positional_checks/solver.quadtree.furthest_depth) > len(celestial_bodies):
+        temp = f"{int(solver.quadtree.positional_checks/solver.quadtree.furthest_depth)} > {len(celestial_bodies)}"
+    elif int(solver.quadtree.positional_checks/solver.quadtree.furthest_depth) == len(celestial_bodies):
+        temp = f"{int(solver.quadtree.positional_checks/solver.quadtree.furthest_depth)} == {len(celestial_bodies)}"
     else:
-        temp = f"{int(quadtrees.position_checks/quadtrees.furthest_depth)} < {len(celestial_bodies)}"
+        temp = f"{int(solver.quadtree.positional_checks/solver.quadtree.furthest_depth)} < {len(celestial_bodies)}"
     
+    debug_text(display, Vector2(0, 0), f"Quadtree checks: {solver.quadtree.positional_checks}  ||  Quadtree depth: {solver.quadtree.furthest_depth} || {temp}", debug_font, (200, 200, 200))
+    debug_text(display, Vector2(0, 18), f"Collision checks: {solver.collision_checks}", debug_font, (200, 200, 200))
     
-    debug_text(display, Vector2(0, 0), f"Quadtree checks: {quadtrees.position_checks}  ||  Quadtree depth: {quadtrees.furthest_depth} || {temp}", debug_font, (200, 200, 200))
-    debug_text(display, Vector2(0, 18), f"Collision checks: {physics.collision_checks}", debug_font, (200, 200, 200))
-    
-    
-    # debug_text(display, Vector2(0,0), f"Mouse Position: {converted_mouse_position}", debug_font, (200, 200, 200))
-    # quadtree.find_position(quadtree, converted_mouse_position).draw_quad(display, (255, 0, 0), display_scale, display_position)
-    # debug_text(display, Vector2(0,18), f"Adjusted Mouse Position: {converted_mouse_position}", debug_font, (200, 200, 200))
-    
+    # try:
+    mouse_quad = Quadtree.find_position(solver.quadtree, converted_mouse_position)
+    mouse_quad.draw_quad(display, (255, 0, 0), display_scale, display_position)
+    adjacent = mouse_quad.find_adjacent()
+    for cell in adjacent:
+        cell.draw_quad(display, (0, 0, 255), display_scale, display_position)
+    try:
+        debug_text(display, Vector2(0, 36), f"Current  Index: {solver.quadtree.temp[0]}", debug_font, (200, 200, 200))
+        debug_text(display, Vector2(0, 54), f"Needed Directions: {solver.quadtree.temp[1]}", debug_font, (200, 200, 200))
+        debug_text(display, Vector2(0, 72), f"Found Cell: {solver.quadtree.temp[2]}", debug_font, (200, 200, 200))
+    except: # Bare except... spooky!
+        pass
+    # ---------------DEBUG-----------------
 
     
     # Update Screen

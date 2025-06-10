@@ -1,15 +1,9 @@
 import pygame # My favorite rendering library... 
 from pygame import Vector2, gfxdraw # ... outshined only by gfxdraw
-from copy import deepcopy
-
-global position_checks # These are just here for the time being as I debug this code, perhaps I should just switch to keeping track of it in the root cell of the tree. TODO
-position_checks = 0
-global furthest_depth
-furthest_depth = 1
 
 class Quadtree():
     
-    def __init__(self, position:Vector2, width:int, expansion_threshold:int, ancestor:"Quadtree" = False, depth:int = 1) -> None:
+    def __init__(self, position:Vector2, width:int, expansion_threshold:int, ancestor:"Quadtree" = False, parent: "Quadtree" = False, index: list[int, int] = False,  depth:int = 1) -> None:
         """Initialize a Quadtree cell with the given information.
 
         Args:
@@ -19,19 +13,29 @@ class Quadtree():
             ancestor (Quadtree, optional): _The root/ancestor cell of the Quadtree._. Defaults to self (this works for root cells).
             depth (int, optional): _Recursive depth of the cell, purely for debugging and completely optional._. Defaults to 1.
         """        
-        self.position = position
-        self.width = width
-        self.expansion_threshold = expansion_threshold
+        self.position: Vector2 = position
+        self.width: int = width
+        self.expansion_threshold: int = expansion_threshold
         if not ancestor:
-            self.ancestor = self
+            self.ancestor: Quadtree = self
         else:
             self.ancestor: Quadtree = ancestor
+        
+        self.depth: int = depth
+        self.max_depth: int = 20 # This is only acessed in the ancestor and is used to protect us from infinite recursion, this may be fixed and not needed when proper collisions are implemented, but I can't ever say for sure
+        self.parent: Quadtree = parent
+        self.index: list[int, int] = index
+    
         
         self.contents = []
         self.is_divided: bool = False
         self.cells: list[list[Quadtree]] = [[],[]]
-        self.depth = depth
         
+        # These are only used by the ancestor for debug
+        self.positional_checks: int = 0
+        self.furthest_depth: int = 1
+        self.temp = False
+                
         self.monopole = 0
         self.dipole = Vector2()
         
@@ -44,13 +48,31 @@ class Quadtree():
         Args:
             object (_Any_): _Object for insertion, preferably a Celestial\_Body._
         """        
+
+        if self.is_divided:
+            x = 1
+            y = 1
+            if object.position.x < self.position.x:
+                x = 0
+            if object.position.y < self.position.y:
+                y = 0
+            self.cells[x][y].insert(object)
+            return
+        
         self.contents.append(object)
         
-        if len(self.contents) > self.expansion_threshold:
-            self.subdivide()
-            for obj in self.contents: # Now that we have split, we need to find the cells that our contents inhabit
-                self.find_position(self.ancestor, obj.position).contents.append(obj)
+        if len(self.contents) > self.expansion_threshold and self.depth < self.ancestor.max_depth:
+            old_contents = self.contents[:]
             self.contents = []
+            self.subdivide()
+            for obj in old_contents: # Now that we have split, we need to find the cells that our contents inhabit
+                x = 1
+                y = 1
+                if obj.position.x < self.position.x:
+                    x = 0
+                if obj.position.y < self.position.y:
+                    y = 0
+                self.cells[x][y].insert(obj)
     
     
     @staticmethod
@@ -64,8 +86,7 @@ class Quadtree():
         Returns:
             Quadtree: _Found cell._
         """        
-        global position_checks
-        position = deepcopy(position) # We operate on the position so we need to make a copy
+        position = Vector2(position.x, position.y) # We operate on the position so we need to make a copy
         position += Vector2(quadtree.width//2, quadtree.width//2) # adjust for slight offset
         while quadtree.is_divided:
             try:
@@ -81,9 +102,122 @@ class Quadtree():
                 
             
             quadtree = quadtree.cells[x][y]
-            position_checks += 1 # Keep track for debugging
+            quadtree.ancestor.positional_checks += 1 # Keep track for debugging
         return quadtree
             
+            
+    def find_adjacent(self) -> list["Quadtree"]:
+        if not self.index:
+            return []
+        # Find adjacent sibling cells (Children of those siblings is further down the line):
+        horizontal_cell_index = [int(not self.index[0]), self.index[1]] # Cells to either side of a given cell at the same level have inverse x values of the cell, even if they have different parents
+        vertical_cell_index = [self.index[0], int(not self.index[1])] # Cells above or below a given cell at the same level have inverse y values of the cell, even if they have different parents
+        corner_cell_index = [int(not self.index[0]), int(not self.index[1])] # The corner cells always share an index that is opposite the given cell.
+        sides = [] # Left and right
+        caps = [] # Top and bottom
+        corners = [] # All four corners
+        
+        needed_directions = [
+            [0, -1], # up
+            [0, 1], # down
+            [-1, 0], # left
+            [1, 0] # right
+        ]
+        
+        # Section for left or right sibling cell:
+        current_indices = [[0, 0],[0, 1]] 
+        side:"Quadtree" = self.parent.cells[horizontal_cell_index[0]][horizontal_cell_index[1]]
+        if side.is_divided:
+            if self.position.x > side.position.x: # If our current cell is to the right of the found adjacent:
+                current_indices[0][0] = 1
+                current_indices[1][0] = 1
+                needed_directions.pop(2) # remove left
+            else:
+                needed_directions.pop(3) # remove right
+                
+            sides += self.find_child_pair(self.parent.cells[horizontal_cell_index[0]][horizontal_cell_index[1]], current_indices)
+        else:         
+            sides.append(side)
+            if self.position.x > side.position.x: # If our current cell is to the right of the found adjacent:
+                needed_directions.pop(2) # remove left
+            else:
+                needed_directions.pop(3) # remove right
+        
+        # Section for top or bottom sibling cell:
+        current_indices = [[0, 0],[1, 0]]
+        cap:"Quadtree" = self.parent.cells[vertical_cell_index[0]][vertical_cell_index[1]]
+        if cap.is_divided:
+            if self.position.y > cap.position.y: # If our current cell is below our found adjacent:
+                current_indices[0][1] = 1
+                current_indices[1][1] = 1
+                needed_directions.pop(0) # remove up
+            else:
+                needed_directions.pop(1) # remove down
+            caps += self.find_child_pair(self.parent.cells[vertical_cell_index[0]][vertical_cell_index[1]], current_indices)
+        else:         
+            caps.append(cap)
+            if self.position.y > cap.position.y: # If our current cell is below our found adjacent:
+                needed_directions.pop(0) # remove up
+            else:
+                needed_directions.pop(1) # remove down
+
+        # Section for corner sibling cell:        
+        current_indices = [[0, 0]]
+        corner:"Quadtree" = self.parent.cells[corner_cell_index[0]][corner_cell_index[1]]
+        if corner.is_divided:
+            if self.position.y > corner.position.y:
+                current_indices[0][1] = 1
+            if self.position.x > corner.position.x:
+                current_indices[0][0] = 1
+            corners += self.find_child_pair(self.parent.cells[corner_cell_index[0]][corner_cell_index[1]], current_indices)
+        else:         
+            corners.append(corner)
+            
+        self.ancestor.temp = [self.index, needed_directions]
+
+
+        # ----- V ----- NOT YET IMPLEMENTED ----- V -----
+
+        # for direction in needed_directions:
+        #     if self.parent and self.parent.parent:
+        #         current_cell = self.parent
+        #         current_parent = current_cell.parent
+        #         x = 0
+        #         y = 0
+        #         while current_parent.index and [x, y] != direction:
+        #             print([current_cell.index[0] + direction[0], current_cell.index[1] + direction[1]])
+        #             index_x = 0 if current_cell.index[0] + direction[0] > 1 else current_cell.index[0] + direction[0]
+        #             index_y = 0 if current_cell.index[1] + direction[1] > 1 else current_cell.index[1] + direction[1]
+                    
+        #             potential_cell = current_parent.cells[index_x][index_y]
+        #             x = -1 if potential_cell.position.x < self.position.x else 1 if potential_cell.position.x < self.position.x else 0
+        #             y = -1 if potential_cell.position.y < self.position.y else 1 if potential_cell.position.y < self.position.y else 0
+        #             current_cell = current_parent
+        #             current_parent = current_parent.parent
+                
+        #         if [x, y] == needed_directions:
+        #             sides.append(potential_cell)
+                
+            
+        return sides + caps + corners
+        
+        
+        
+        
+        
+        
+    
+    
+    def find_child_pair(self, cell:"Quadtree", indices:list[list[int, int], list[int, int]]) -> list["Quadtree"]:
+        found_cells = []
+        if cell.is_divided:
+            for index in indices:
+                found_cells += cell.find_child_pair(cell.cells[index[0]][index[1]], indices)
+            # found_cells += cell.find_child_pair(cell.cells[indices[1][0]][indices[1][1]], indices)
+        else:
+            found_cells.append(cell)
+        return found_cells
+    
             
     def calculate_poles(self, surface:pygame.Surface, color:tuple[int, int, int] = (255, 0, 0), scale:float = 1, offset: Vector2 = Vector2(0, 0)) -> None:  
         """Calculate and render the monopole and dipole of this Quadtree cell.
@@ -117,35 +251,25 @@ class Quadtree():
 
         try:
             gfxdraw.aacircle(surface, int(self.dipole.x * scale + offset.x), int(self.dipole.y * scale + offset.y), int((self.monopole**0.25) * scale), color)
-            # print(int((self.monopole**0.1)*(self.width//8)))
         except OverflowError:
             print(f"X: {int(self.dipole.x)}, Y: {int(self.dipole.y)}, R: {int(self.monopole**0.5)}")
         
-        
-    @staticmethod
-    def reset_checks() -> None:
-        """Reset the debugging global values.
-        """        
-        global position_checks, furthest_depth
-        position_checks = 0
-        furthest_depth = 1
     
         
     def subdivide(self) -> None:
         """Subdivide this Quadtree cell into four other cells.
         """        
-        global furthest_depth
         subdivided_size = self.width/2  # Do these operations here to avoid doing them a load of times
         half_sub_size = subdivided_size/2
         #       Coordinate          |                              Center Position                        | Set New width  | Set Expansion Threshold | Mark Ancestor
-        self.cells[0].append(Quadtree(Vector2(self.position.x-half_sub_size, self.position.y-half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self.depth+1)) # DATA STRUCTURE:               (EACH QUADRANT WITH IT'S OWN FOUR QUADRANTS)
-        self.cells[0].append(Quadtree(Vector2(self.position.x-half_sub_size, self.position.y+half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self.depth+1)) # [  0 [Q1, Q2]
-        self.cells[1].append(Quadtree(Vector2(self.position.x+half_sub_size, self.position.y-half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self.depth+1)) #    1 [Q3, Q4]  ] 
-        self.cells[1].append(Quadtree(Vector2(self.position.x+half_sub_size, self.position.y+half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self.depth+1)) #       0    1
+        self.cells[0].append(Quadtree(Vector2(self.position.x-half_sub_size, self.position.y-half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self, [0, 0], self.depth+1)) # DATA STRUCTURE:               (EACH QUADRANT WITH IT'S OWN FOUR QUADRANTS)
+        self.cells[0].append(Quadtree(Vector2(self.position.x-half_sub_size, self.position.y+half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self, [0, 1], self.depth+1)) # [  0 [Q1, Q2]
+        self.cells[1].append(Quadtree(Vector2(self.position.x+half_sub_size, self.position.y-half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self, [1, 0], self.depth+1)) #    1 [Q3, Q4]  ] 
+        self.cells[1].append(Quadtree(Vector2(self.position.x+half_sub_size, self.position.y+half_sub_size), subdivided_size, self.expansion_threshold, self.ancestor, self, [1, 1], self.depth+1)) #       0    1
         self.is_divided = True
         
-        if self.depth + 1 > furthest_depth: # This is for debugging
-            furthest_depth = self.depth + 1
+        if self.depth + 1 > self.ancestor.furthest_depth: # This is for debugging
+            self.ancestor.furthest_depth = self.depth + 1
         
     
     def draw_quad(self, surface: pygame.Surface, color: tuple[int, int, int] = (200, 200, 200), scale: float = 1, offset: Vector2 = Vector2(0, 0)) -> None:
