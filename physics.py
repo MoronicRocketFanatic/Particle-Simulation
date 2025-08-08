@@ -167,8 +167,8 @@ class Solver():
         else: # Does not yet compare to adjacent Quadtree cells... TODO
             object_pool = []
             object_pool += quadtree.contents
-            # for cell in quadtree.find_adjacent():
-            #     object_pool += cell.contents
+            for cell in quadtree.find_adjacent():
+                object_pool += cell.contents
             for body_1 in object_pool:
                 for body_2 in object_pool:
                     self.collision_checks+=1 # Increment debug variable

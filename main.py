@@ -22,7 +22,7 @@ FPS = 75
 engine_clock = pygame.time.Clock()
 total_time = 0
 delta_time = 1/FPS
-
+pause = False
 
 DEFAULT_MASS = 2000000
 SUBSETS = 1
@@ -33,8 +33,9 @@ mouse_position = pygame.mouse.get_pos()
 drag_start = [display_position, mouse_position]
 
 sys.setrecursionlimit(5000000) # Needed, stack overflow is not really gonna happen with how the recursion is built
-quadtree = Quadtree(Vector2(0, 0), 8000, 5)
+quadtree = Quadtree(Vector2(0, 0), 8000, 3)
 celestial_bodies = [Celestial_Body(Vector2(0, 0), 15, DEFAULT_MASS, (0, 50, 255)), Celestial_Body(Vector2(0 + 80, 0), 30, DEFAULT_MASS*2, (255, 165, 0))]
+
 # for body in range(5000): # Uncomment for spawning of 5000 random objects
 #     celestial_bodies.append(Celestial_Body(Vector2(randint(-3800, 3800), randint(-3800, 3800)), randint(15, 45), DEFAULT_MASS*randint(1, 5), rainbow_cycle(body/10)))
 
@@ -76,7 +77,8 @@ while running:
             if event.key == pygame.K_DELETE: # Just a scene clear
                 solver.objects = []
                 celestial_bodies = solver.objects
-                      
+            elif event.key == pygame.K_F10:
+                pause = not pause
                 
         elif event.type == pygame.VIDEORESIZE:
             WINDOW_WIDTH, WINDOW_HEIGHT = pygame.display.get_window_size()
@@ -133,9 +135,10 @@ while running:
         solver.objects = celestial_bodies
     
     # Update Physics 
-    solver.update(delta_time)
-    total_time += delta_time
-    
+    if not pause:
+        solver.update(delta_time)
+        total_time += delta_time
+        
     # Render objects
     solver.draw_constraint(display, display_scale, display_position)
     for object in solver.objects:

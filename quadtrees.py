@@ -19,15 +19,18 @@ class Quadtree():
         self.position: Vector2 = position
         self.width: int = width
         self.expansion_threshold: int = expansion_threshold
-        if not ancestor:
-            self.ancestor: Quadtree = self
+        if not ancestor: # Dumb ass shit that I have to do for tree traversal. Perhaps I should just fix my code and omit this entirely... TODO
             self.ancestor: Quadtree = self
         else:
             self.ancestor: Quadtree = ancestor
         
         self.depth: int = depth
-        self.max_depth: int = 20 # This is only acessed in the ancestor and is used to protect us from infinite recursion, this may be fixed and not needed when proper collisions are implemented, but I can't ever say for sure
-        self.parent: Quadtree = parent
+        self.max_depth: int = 20 # This is only accessed in the ancestor and is used to protect us from infinite recursion, this may be fixed and not needed when proper collisions are implemented, but I can't ever say for sure
+        if not parent: # Dumb ass shit v2. Yet again to prevent TypeErrors when I do my Moronic™ tree traversal
+            self.parent: Quadtree = self
+        else:
+            self.parent: Quadtree = parent
+            
         self.index: list[int, int] = index
     
         
@@ -111,113 +114,115 @@ class Quadtree():
             
             
     def find_adjacent(self) -> list["Quadtree"]:
-        if not self.index:
+        if not self.ancestor.is_divided:
             return []
-        # Find adjacent sibling cells (Children of those siblings is further down the line):
-        horizontal_cell_index = [int(not self.index[0]), self.index[1]] # Cells to either side of a given cell at the same level have inverse x values of the cell, even if they have different parents
-        vertical_cell_index = [self.index[0], int(not self.index[1])] # Cells above or below a given cell at the same level have inverse y values of the cell, even if they have different parents
-        corner_cell_index = [int(not self.index[0]), int(not self.index[1])] # The corner cells always share an index that is opposite the given cell.
-        sides = [] # Left and right
-        caps = [] # Top and bottom
-        corners = [] # All four corners
-        
+        """Find and return all four adjacent Quadtree cells. _Useful for detecting collision between cells._
+
+        Returns:
+            _list[Quadtree...]_: _A potentially long list of Quadtree cells adjacent to the current one, at the lowest possible depth._
+        """        
         needed_directions = [
             [0, -1], # up
             [0, 1], # down
             [-1, 0], # left
             [1, 0] # right
+            # #corners:
+            # [-1, -1], #top left
+            # [1, -1], #top right
+            # [1, 1], #bottom right
+            # [-1, 1] #bottom left
         ]
-        
-        # Section for left or right sibling cell:
-        current_indices = [[0, 0],[0, 1]] 
-        side:"Quadtree" = self.parent.cells[horizontal_cell_index[0]][horizontal_cell_index[1]]
-        if side.is_divided:
-            if self.position.x > side.position.x: # If our current cell is to the right of the found adjacent:
-                current_indices[0][0] = 1
-                current_indices[1][0] = 1
-                needed_directions.pop(2) # remove left
-            else:
-                needed_directions.pop(3) # remove right
-                
-            sides += self.find_child_pair(self.parent.cells[horizontal_cell_index[0]][horizontal_cell_index[1]], current_indices)
-        else:         
-            sides.append(side)
-            if self.position.x > side.position.x: # If our current cell is to the right of the found adjacent:
-                needed_directions.pop(2) # remove left
-            else:
-                needed_directions.pop(3) # remove right
-        
-        # Section for top or bottom sibling cell:
-        current_indices = [[0, 0],[1, 0]]
-        cap:"Quadtree" = self.parent.cells[vertical_cell_index[0]][vertical_cell_index[1]]
-        if cap.is_divided:
-            if self.position.y > cap.position.y: # If our current cell is below our found adjacent:
-                current_indices[0][1] = 1
-                current_indices[1][1] = 1
-                needed_directions.pop(0) # remove up
-            else:
-                needed_directions.pop(1) # remove down
-            caps += self.find_child_pair(self.parent.cells[vertical_cell_index[0]][vertical_cell_index[1]], current_indices)
-        else:         
-            caps.append(cap)
-            if self.position.y > cap.position.y: # If our current cell is below our found adjacent:
-                needed_directions.pop(0) # remove up
-            else:
-                needed_directions.pop(1) # remove down
-
-        # Section for corner sibling cell:        
-        current_indices = [[0, 0]]
-        corner:"Quadtree" = self.parent.cells[corner_cell_index[0]][corner_cell_index[1]]
-        if corner.is_divided:
-            if self.position.y > corner.position.y:
-                current_indices[0][1] = 1
-            if self.position.x > corner.position.x:
-                current_indices[0][0] = 1
-            corners += self.find_child_pair(self.parent.cells[corner_cell_index[0]][corner_cell_index[1]], current_indices)
-        else:         
-            corners.append(corner)
             
-        self.ancestor.temp = [self.index, needed_directions]
-
-
-        # ----- V ----- NOT YET IMPLEMENTED ----- V -----
-
-        # for direction in needed_directions:
-        #     if self.parent and self.parent.parent:
-        #         current_cell = self.parent
-        #         current_parent = current_cell.parent
-        #         x = 0
-        #         y = 0
-        #         while current_parent.index and [x, y] != direction:
-        #             print([current_cell.index[0] + direction[0], current_cell.index[1] + direction[1]])
-        #             index_x = 0 if current_cell.index[0] + direction[0] > 1 else current_cell.index[0] + direction[0]
-        #             index_y = 0 if current_cell.index[1] + direction[1] > 1 else current_cell.index[1] + direction[1]
+        found = [] # Tally our found adjacents
+        cell:Quadtree = self.parent # Already found the local parent's cells
+        ancestor_loops = 0 # We need to do at least one iteration WITH the ancestor, anything else isn't needed
+        while ancestor_loops < 1 and len(needed_directions) > 0:
+            if cell == self.ancestor:
+                ancestor_loops+=1
+            dist_between_cells = (self.width + cell.cells[0][0].width)/2 # Calculate the distance between our cell and cells that would sit next to ours
+            for sub_row in cell.cells:
+                for sub_cell in sub_row:
+                    dx = sub_cell.position.x - self.position.x # sub_cell is first because it makes more sense with negatives
+                    dy = sub_cell.position.y - self.position.y
                     
-        #             potential_cell = current_parent.cells[index_x][index_y]
-        #             x = -1 if potential_cell.position.x < self.position.x else 1 if potential_cell.position.x < self.position.x else 0
-        #             y = -1 if potential_cell.position.y < self.position.y else 1 if potential_cell.position.y < self.position.y else 0
-        #             current_cell = current_parent
-        #             current_parent = current_parent.parent
-                
-        #         if [x, y] == needed_directions:
-        #             sides.append(potential_cell)
-                
-            
-        return sides + caps + corners
+                    # if abs(dx) == dist_between_cells and abs(dy) == dist_between_cells: # Theoretical corner logic, NOT YET IMPLEMENTED!!! TODO
+                    #     if dx > 0:
+                    #         dx = 1
+                    #     elif dx < 0:
+                    #         dx = -1                        
+                    #     if dy > 0:
+                    #         dy = 1
+                    #     elif dy < 0:
+                    #         dy = -1
+                                                
+                    if abs(dx) == dist_between_cells and abs(dy) <= sub_cell.width/2: # Check that we are the correct distance, AND ensure that the other direction is within a margin of error
+                        dy = 0 
+                        if dx > 0:
+                            dx = 1
+                        elif dx < 0:
+                            dx = -1
+                    elif abs(dy) == dist_between_cells and abs(dx) <= sub_cell.width/2: # Same but for y
+                        dx = 0
+                        if dy > 0:
+                            dy = 1
+                        elif dy < 0:
+                            dy = -1
+                    
+                    
+                    if [dx, dy] in needed_directions: # Now we have the first found adjacent cell in a given direction
+                        needed_directions.remove([dx, dy])
+                        
+                        while sub_cell.depth < self.depth and sub_cell.is_divided: #simply traverse down the tree
+                            closest = sub_cell.cells[0][0]
+                            closest_distance = (self.position - closest.position).length()
+                            
+                            for row in sub_cell.cells: 
+                                for double_sub_cell in row:
+                                    distance = (self.position - double_sub_cell.position).length() # finding the closest cells 
+                                    if distance < closest_distance:
+                                        closest = double_sub_cell
+                                        closest_distance = distance
+                                        
+                            sub_cell = closest # Continue until we sit at the same level as the working cell
+                        if sub_cell.is_divided: # The above method doesn't work for cells below ours
+                            found += self.find_child_pair_distance(sub_cell)
+                        else:
+                            found.append(sub_cell)
+            cell = cell.parent
+        return found
         
         
-        
-        
-        
-        
-    
-    
-    def find_child_pair(self, cell:"Quadtree", indices:list[list[int, int], list[int, int]]) -> list["Quadtree"]:
+    def find_child_pair_distance(self, cell:"Quadtree") -> list["Quadtree"]:
+        """Finds a pair of children for a given cell that are closest to the cell calling the function, will then utilize find\_child\_pair() to finish the operation far faster.
+
+        Returns:
+            _list[Quadtree...]_: _A potentially long list of children Quadtree cells._
+        """        
+        closest = [None, None]
+        closest_distance = [(self.position - cell.cells[0][0].position).length() * 10, (self.position - cell.cells[0][0].position).length() * 10] # Arbitrarily large values, searching for two distances of the same length
+        for x, row in enumerate(cell.cells):
+            for y, sub_cell in enumerate(row):
+                distance = (self.position - sub_cell.position).length()
+                if distance < closest_distance[0]:
+                    closest[0] = [x, y]
+                    closest_distance[0] = distance
+                elif distance < closest_distance[1]: # The genius here is that once we find the first distance, the second one will automatically slot into here, no need to validate that they are different
+                    closest[1] = [x, y]
+                    closest_distance[1] = distance
+
+        return Quadtree.find_child_pair(cell, closest) # Make use of the much faster index-based method
+                    
+    @staticmethod
+    def find_child_pair(cell:"Quadtree", indices:list[list[int, int], list[int, int]]) -> list["Quadtree"]:
+        """Finds the pair of children with the given indices, fairly quick operation. Opt for find\_child\_pair\_distance unless you know what you're doing here.
+
+        Returns:
+            _list[Quadtree...]_: _A potentially long list of children Quadtree cells._
+        """        
         found_cells = []
         if cell.is_divided:
-            for index in indices:
-                found_cells += cell.find_child_pair(cell.cells[index[0]][index[1]], indices)
-            # found_cells += cell.find_child_pair(cell.cells[indices[1][0]][indices[1][1]], indices)
+            for index in indices: # Thanks to this data structure's patterns, children cells will repeat the same two indices for as long as you traverse down 
+                found_cells += cell.find_child_pair(cell.cells[index[0]][index[1]], indices) # Recursion putting in the work
         else:
             found_cells.append(cell)
         return found_cells

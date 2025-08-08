@@ -1,4 +1,5 @@
 import math
+from pygame import Vector2
 
 def rainbow_cycle(time:float) -> tuple[float, float, float]:
     """A function that "cycles" through colors with a given time, uses sine functions to achieve this.
@@ -65,6 +66,15 @@ def color_temperature_rgb(temperature:int=1500) -> tuple[float, float, float]:
     
     
     return (red, green, blue)
+
+
+
+def to_camera(position:Vector2, display_scale:float, display_offset:Vector2) -> Vector2:
+    return position * display_scale + display_offset
+
+def from_camera(position:Vector2, display_scale:float, display_offset:Vector2) -> Vector2:
+    return (position - display_offset) / display_scale
+
 
 
 def test(i) -> int:

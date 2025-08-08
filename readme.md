@@ -8,6 +8,6 @@ The Fast Multipole Method (FMM) will eventually be implemented in order to calcu
 Updates are slow because this is a side-project of mine, expect an eventual conversion to C++, which may be a re-factor, a seperate branch, or another repository altogether.
 
 ## Up Next:
-* Solve collisions for objects in adjacent cells
+* Solve collisions for objects in adjacent (corner) cells
 * Fast Multipole Method (FMM)
 * Optimize Quadtrees (May not be an actual issue, they just seem like there may be an error in their derivation)
