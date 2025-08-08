@@ -226,44 +226,6 @@ class Quadtree():
         else:
             found_cells.append(cell)
         return found_cells
-    
-            
-    def calculate_poles(self, surface:pygame.Surface, color:tuple[int, int, int] = (255, 0, 0), scale:float = 1, offset: Vector2 = Vector2(0, 0)) -> None:  
-        """Calculate and render the monopole and dipole of this Quadtree cell.
-
-        Args:
-            surface (pygame.Surface): _Surface to render to._
-            color (tuple[int, int, int], optional): _Color of the pole._. Defaults to (255, 0, 0) / Red.
-            scale (float, optional): _Scale of the pole._. Defaults to 1.
-            offset (Vector2, optional): _Offset of the Pole._. Defaults to Vector2(0, 0).
-        """        
-        self.monopole = 0
-        self.dipole = Vector2() #PyGame Vector2
-        
-        if self.is_divided: # Calculate from child cells
-            for row in self.cells:
-                for quad in row: # Iterate over cells
-                    quad.calculate_poles(surface, color, scale, offset) # First find the poles of the cell
-                    self.monopole += quad.monopole # Now add the mass to our total
-                    self.dipole += quad.dipole * quad.monopole # Add the cell's position (as a PyGame Vector2) times the times its mass (as shown in m_i(x_i, y_i))
-            
-            if self.monopole > 0:
-                self.dipole /= self.monopole
-            
-        else: # Calculate from particles
-            for object in self.contents: # iterate over particles 
-                self.monopole += object.mass # add mass
-                self.dipole += object.position * object.mass # Add the position (as a PyGame Vector2) times the object's mass (as shown in m_i(x_i, y_i))
-            
-            if self.monopole > 0:
-                self.dipole /= self.monopole 
-
-        try:
-            gfxdraw.aacircle(surface, int(self.dipole.x * scale + offset.x), int(self.dipole.y * scale + offset.y), int((self.monopole**0.25) * scale), color)
-        except OverflowError:
-            print(f"X: {int(self.dipole.x)}, Y: {int(self.dipole.y)}, R: {int(self.monopole**0.5)}")
-        
-    
         
     def subdivide(self) -> None:
         """Subdivide this Quadtree cell into four other cells.
